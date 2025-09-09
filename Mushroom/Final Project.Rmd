@@ -1,0 +1,615 @@
+---
+title: "Final Project 231"
+author: "PSTAT 231"
+date: "2024-05-14"
+output:
+    html_document:
+      toc: true
+      toc_float: true
+      code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Mushrooms!
+🍄 Who doesn't love them?
+In this project, our goal is to develop a machine learning model that predicts whether a wild mushroom is edible or poisonous.
+I'll be using a dataset called 'mushroom.csv' from Kaggle, which we'll explore in more detail later.
+Throughout this project, I will apply various machine learning techniques to create the most accurate model possible for this classification challenge.
+
+![](images/mushroom%20.jpeg)
+
+## Why Mushrooms?
+
+Everyone understands the risks associated with consuming wild mushrooms.
+What if there was a predictive model that could determine whether a mushroom is edible?
+Imagine having access to a tool that enhances safety when foraging.
+For example, you're camping and gather herbs for a meal; you spot mushrooms that seem perfect for your stir fry, but you're uncertain if they're safe to eat.
+This is where the predictive model proves invaluable.
+
+## Data Description
+
+In this project, we will be working with the "[Mushroom Classification](https://www.kaggle.com/datasets/vishalpnaik/mushroom-classification-edible-or-poisonous?resource=download)" dataset, a public dataset sourced from Kaggle.
+This dataset encompasses records for 61,069 mushrooms, providing descriptions for hypothetical samples across 173 species of gilled mushrooms.
+Each mushroom is classified as either edible, poisonous, or of unknown edibility.
+With **20 attributes** including cap characteristics, stem features, and habitat.
+Due to the complex nature of mushrooms, no straightforward rules exist for determining their edibility, making this dataset a valuable resource for our analysis.
+
+*Citation*
+
+*Naik, Vishal P. “Mushroom Classification: Edible or Poisonous?” Kaggle, 8 Mar. 2024, www.kaggle.com/datasets/vishalpnaik/mushroom-classification-edible-or-poisonous?resource=download.*
+
+## Project Road Map
+
+We'll begin by conducting exploratory data analysis (EDA) to better understand our dataset and its variables.
+Our objective is to predict whether a mushroom is poisonous or not using a binary response variable named "class." Following the EDA, we'll split our data into training and testing sets, create a recipe for pre-processing, and prepare for 10-fold cross-validation.
+
+We plan to explore a variety of predictive models including Logistic Regression, Linear Discriminant Analysis, Decision Tree, Random Forest, and K-Nearest Neighbors.
+We will train these models on the training data, selecting the one that demonstrates the best performance.
+The chosen model will then be applied to the test dataset to evaluate its effectiveness in accurately predicting the class of mushrooms.
+
+# Exploring Our Data
+
+Before we do anything to our dataset.
+We have to first load the dataset and see what our data look like.
+There can be some variables that might need to converted to factors, or some missing values that might need to be cleaned.
+In this section, there will be some manipulation and tidying of our data before we analyze some of the key variables using visualizations and other functions.
+
+## Loading Packages
+
+First, let’s load in all of our packages.
+
+```{r}
+# Loading all necessary packages
+library(tidyverse)
+library(dplyr)
+library(tidymodels)
+library(kknn)
+library(ISLR)
+library(discrim)
+library(ranger)
+library(poissonreg)
+library(glmnet)
+library(finalfit)
+library(corrr)
+library(corrplot)
+library(ggplot2)
+library(forcats)
+library(vip)
+library(readr)
+library(yardstick)
+```
+
+## Loading in the Dataset
+
+Next, load in our raw data.
+
+```{r}
+# Assigning the data to a variable
+mushroom <- read_csv("/Users/fionhuang/Desktop/Pstat 131/Final Project/mushroom.csv")
+tidymodels_prefer()
+
+# Calling head() to see the first few rows
+head(mushroom)
+```
+
+## Exploring Raw Data
+
+```{r}
+# Checking for number of missing values in each variable 
+missing_data <- sapply(mushroom, function(x) sum(is.na(x)))
+print(missing_data)
+
+# Plot of missing values in the data
+mushroom %>%
+  missing_plot()
+
+# Number of total missing values
+sum(is.na(mushroom))
+```
+
+There is a decent amount of missing data we have to deal with.
+As we can see in our missing values plot, we are missing a lot of data from `cap-surface`, `gill-attachment`, `gill-spacing`, `veil-type`, `stem-root`, `stem-surface`, `veil-color`, `ring-type`, and `spore-print-color`.
+With so much missing data in all these predictors, we might be forced to remove them from the dataset entirely because it will otherwise impede on our predictions and cause errors.
+
+## Tidying the Data
+
+Now we will tidy up our data.
+First, we will drop the variables with missing data.
+Next, we have our response variable `class`, which is currently a binary variable.
+Our response variable should be a factor, we will reorder the factor so that "p” is the second level. “p” will mean it is poisonous, and “e” will be edible.
+
+```{r}
+drop <- c("cap-surface","gill-attachment", "gill-spacing", "veil-type", 
+           "stem-root", "stem-surface", "veil-color","ring-type", "spore-print-color")
+mushroom <- mushroom[,!(names(mushroom) %in% drop)]
+
+# Make class a factor
+mushroom$class <- factor(mushroom$class, labels = c("e", "p"))
+mushroom$`cap-shape` <- as.factor(mushroom$`cap-shape`) 
+mushroom$`cap-color` <- as.factor(mushroom$`cap-color`)
+mushroom$`gill-color` <- as.factor(mushroom$`gill-color`)
+mushroom$`stem-color` <- as.factor(mushroom$`stem-color`)
+mushroom$`has-ring` <- factor(mushroom$`has-ring`, labels = c("FALSE ", "TRUE") )
+mushroom$habitat <- as.factor(mushroom$habitat)
+mushroom$season <- as.factor(mushroom$season)
+
+# View updated dataset with no miss variables
+view(mushroom)
+```
+
+## Describing the Predictors
+
+| Variable               | Type     | Description                                                   | Observation Type                                                                                                                                                    |
+|------------------------|----------|---------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `cap-diameter`         | Metrical | Diameter of the mushroom cap in cm                            | cm                                                                                                                                                                  |
+| `cap-shape`            | Nominal  | Shape of the mushroom cap                                     | 'b' (bell), 'c' (conical), 'x' (convex), 'f' (flat), 's' (sunken), 'p' (spherical), 'o' (others)                                                                    |
+| `cap-color`            | Nominal  | The color of the mushroom cap                                 | 'i' (fibrous), 'g' (grooves), 'y' (scaly), 's' (smooth), 'h' (shiny), 'l' (leathery), 'k' (silky), 't' (sticky), 'w' (wrinkled), 'e' (fleshy)                       |
+| `does-bruise-or-bleed` | Nominal  | Indicates whether the mushroom bruises or bleeds when injured | bruises-or-bleeding = t, no = f                                                                                                                                     |
+| `gill-color`           | Nominal  | Color of the gills                                            | 'n' (brown), 'b' (buff), 'g' (gray), 'r' (green), 'p' (pink), 'u' (purple), 'e' (red), 'w' (white), 'y' (yellow), 'l' (blue), 'o' (orange), 'k' (black), 'f' (none) |
+| `stem-height`          | Metrical | Height of the mushroom stem in cm                             | cm                                                                                                                                                                  |
+| `stem-width`           | Metrical | Width of the mushroom stem in cm                              | mm                                                                                                                                                                  |
+| `stem-color`           | Nominal  | Color of the mushroom stem                                    | 'n' (brown), 'b' (buff), 'g' (gray), 'r' (green), 'p' (pink), 'u' (purple), 'e' (red), 'w' (white), 'y' (yellow), 'l' (blue), 'o' (orange), 'k' (black), 'f' (none) |
+| `has-ring`             | Nominal  | Presence of a ring on the mushroom                            | ring = t, none = f                                                                                                                                                  |
+| `habitat`              | Nominal  | Environment where the mushroom is found                       | 'g' (grasses), 'l' (leaves), 'm' (meadows), 'p' (paths), 'h' (heaths), 'u' (urban), 'w' (waste), 'd' (woods)                                                        |
+| `season`               | Nominal  | Season when the mushroom is commonly observed                 | 's' (spring), 'u' (summer), 'a' (autumn), 'w' (winter)                                                                                                              |
+
+## Visual EDA
+
+By visualizing our variable we will get a better idea of the distribution of the respond and predictor variable.
+We will generate an output variable plot as well a correlation matrix to identify potential correlations between our predictor variables.
+Additionally, we’ll create visualization plots to see the effect that certain variables of interest have on our response variable.
+
+![](images/mushroom%201.jpeg)
+
+```{r}
+mushroom %>%
+  select(where(is.numeric)) %>%
+  cor() %>%
+  corrplot()
+```
+
+### Cap-Diameter
+
+When the cap-diameter is 20cm or less there is around a 50/50 split of the class of mushrooms.
+However as the cap-diameter get grater than 40cm we can see majority of the class is edible.
+The **right-skewed** distribution suggests that there are mushrooms with exceptionally small cap diameters.
+
+```{r}
+# Barplot of difference in class by cap-diameter
+ggplot(mushroom, aes(`cap-diameter`)) + 
+  geom_bar(aes(fill = class))
+```
+
+### Cap-Shape
+
+From this graph mushrooms with 'x' (convex), 'f' (flat) and 's' (sunken) cap shapes are predominant in both edible and poisonous categories, indicating a common cap morphology across mushroom types.
+However, there are notable differences in other cap shapes, such as 'b' (bell) and 'o' (others), which are more dominant among poisonous mushrooms.
+
+```{r}
+
+ggplot(mushroom, aes(fill = class,`cap-shape`)) + 
+  geom_bar(position = "fill")
+
+# Barplot of difference in class by cap-shape
+mushroom %>%
+  mutate(`cap-shape` = fct_infreq(`cap-shape`)) %>%
+  ggplot(aes(`cap-shape`)) + 
+  geom_bar(aes(fill = class)) +
+  coord_flip()
+```
+
+### Cap-Color
+
+Edible mushrooms are prevalent in cap colors such as 'b' (buff), 'n' (brown), 'w' (white), and 'y' (yellow), with significant counts in each category.
+On the other hand, poisonous mushrooms show a diverse distribution across various cap colors, with notable concentrations in colors like 'r' (green) and 'e' (fleshy).
+Colors like 'u' (purple), 'o' (orange), 'p' (pink) and 'k' (black) are less common but may indicate a higher likelihood of the mushroom being poisonous.
+
+```{r}
+ggplot(mushroom, aes(fill = class,`cap-color`)) + 
+  geom_bar(position = "fill")
+
+# Barplot of difference in class by cap-color
+mushroom %>%
+  mutate(`cap-color` = fct_infreq(`cap-color`)) %>%
+  ggplot(aes(`cap-color`)) + 
+  geom_bar(aes(fill = class)) +
+  coord_flip()
+```
+
+### Bruise or Bleed
+
+Mushrooms that do and do not bruise or bleed have a similar proportion of both edible and poisonous mushrooms.
+The likelihood of bruising or bleeding might not be a significant factor in determining mushroom toxicity.
+
+```{r}
+# Barplot of difference in class by bruise-or-bleed
+ggplot(mushroom, aes(fill = class, `does-bruise-or-bleed`)) + 
+  geom_bar(position="fill")
+```
+
+### Gill-Color
+
+From this graph we can see that, mushrooms with gill color 'e', 'n' and 'f' are predominantly poisonous, while those with gill color 'b' have a higher proportion of edible mushrooms.
+
+```{r}
+ggplot(mushroom, aes(fill = class, `gill-color`)) + 
+  geom_bar(position="fill")
+
+# Barplot of difference in class by gill-color
+mushroom %>%
+  mutate(`gill-color` = fct_infreq(`gill-color`)) %>%
+  ggplot(aes(`gill-color`)) + 
+  geom_bar(aes(fill = class)) +
+  coord_flip()
+```
+
+### Stem-Height
+
+Edible mushrooms exhibit a greater stem height on average compared to poisonous mushrooms.
+The overlapping distributions tells us that stem height alone may not be sufficient for distinguishing between edible and poisonous mushrooms.
+
+```{r}
+# Barplot of difference in class by stem-height
+ggplot(mushroom, aes(`stem-height`)) + 
+  geom_bar(aes(fill = class))
+```
+
+### Stem-Color
+
+Stem color 'f' (unknown) has zero proportion of edible mushrooms, indicating it is directly associated with toxicity.
+Stem color 'b' (buff) has zero proportion of poisonous mushrooms, indicating it is not associated with toxicity.
+Stem color 'e' (red), 'k' (black), 'p' (purple), 'r' (green), 'u' (purple), 'y' (yellow) has a significantly higher proportion of poisonous mushrooms compared to edible ones.
+Stem color 'i' (blue), 'o' (orange) and 'n' (brown) has a moderately higher proportion of poisonous mushrooms compared to edible ones.
+
+```{r}
+ggplot(mushroom, aes(fill = class, `stem-color`)) + 
+  geom_bar(position="fill")
+
+# Barplot of difference in class by stem-color
+mushroom %>%
+  mutate(`stem-color` = fct_infreq(`stem-color`)) %>%
+  ggplot(aes(`stem-color`)) + 
+  geom_bar(aes(fill = class)) +
+  coord_flip()
+```
+
+### Has-Rings
+
+Mushrooms with a ring (t) are slightly more poisonous compared to edible ones.
+This difference in counts suggests that the presence or absence of a ring could be a significant factor in determining whether a mushroom is poisonous or edible.
+
+```{r}
+# Barplot of difference in class by has-ring
+ggplot(mushroom, aes(fill = class, `has-ring`)) + 
+  geom_bar(position="fill")
+```
+
+### Habitat
+
+Mushrooms found in habitat 'p' (paths) is exclusively poisonous and mushrooms found in 'u', 'w' is exclusively edible.
+Mushrooms found in habitats 'd', 'g', and 'h' have a moderate proportion of poisonous mushrooms compared to edible ones.
+
+```{r}
+ggplot(mushroom, aes(fill = class, `habitat`)) + 
+  geom_bar(position="fill")
+
+# Barplot of difference in class by habitat
+ggplot(mushroom, aes(`habitat`)) + 
+  geom_bar(aes(fill = class))
+```
+
+## Setting up for the Model
+
+Now that we have a better idea of our data, we can finally move on to building our models.
+We will randomly split our data into training and testing sets, set up and create our recipe, and establish cross-validation within our models.
+
+### Train/Test Split
+
+First to set up our model, we will need to split our data into separate datasets.
+One will be used for the training of our models, and the other will be the testing set, which is saved till the end and used only once when we actually test our models.
+Our very first step, is to set our seed so that our random split can be reproduced every time we train our models.
+Next, we will perform a training / testing split on our data, and stratify on our response variable, `class`.
+
+I will be using a proportion of 0.70, since there is a good amount of observation.
+The training data has 42,747 observation, while the testing data has 18,322 observation.
+
+```{r}
+set.seed(2002) # Setting a seed so the split is the same
+
+split <- initial_split(mushroom, prop = 0.70,
+                                strata = class)
+train <- training(split) # Training split
+test <- testing(split) # Testing split
+split
+
+# Check the correct number of observations in each data set
+dim(test)
+dim(train)
+```
+
+### Building the Recipe
+
+After splitting our data we will now build a recipe which we will use for all the models.
+We will be using 11 out of our 12 predictor variables in our recipe.
+We are excluding does bruise or bleed because mushrooms that do and do not bruise or bleed have a similar proportion of both edible and poisonous mushrooms.
+From looking at the graphs bruising or bleeding it will not be a good factor in determining mushroom toxicity.
+Below, you can see our fully completed recipe.
+
+```{r}
+
+mushroom_recipe <-   # building the recipe to be used for each model
+  recipe(class ~  `cap-diameter` + `cap-shape` + `cap-color` + `gill-color` + 
+           `stem-height` + `stem-width` + `stem-color` + `has-ring` + `habitat` + `season`,
+         data = train) %>% 
+  step_dummy(`cap-shape`) %>%  # dummy predictor on categorical variables
+  step_dummy(`cap-color`) %>%
+  step_dummy(`gill-color`) %>%
+  step_dummy(`stem-color`) %>%
+  step_dummy(`has-ring`) %>%
+  step_dummy(habitat) %>%
+  step_dummy(season) %>%
+  step_center(all_predictors()) %>% # standardizing our predictors
+  step_scale(all_predictors())
+```
+
+### K-Fold Cross Validation
+
+We are going to use stratified cross validation on our response variable, `class`, to help with the issue of imbalanced data.
+We will use 10 folds to perform stratifies cross validation.
+
+```{r}
+folds <- vfold_cv(train, v = 10, strata = class)  # 10-fold CV
+```
+
+# Building and Fitting the Models
+
+We are now ready to start building and fitting our models.
+We will fit five different models.
+These models are Logistic Regression, Linear Discriminant, KNN, Decision Tree, and Random Forest models.
+The first two models are relatively simple and will take much less time to run.
+The final three models are the ones we are more interested in, particularly the Random Forest model, as they are better fit for binary classification problems, which is exactly our case.
+
+## Model Building Process
+
+The general workflow of the model building process constituted of the following steps:
+
+1.  **Model Setup**: Specify the type of model, set its engine, and define its mode as 'classification' due to our project goal.
+
+2.  **Workflow Setup**: Create the model's workflow, add the new model, and incorporate the established recipe.
+
+(For Logistic Regression and Linear Discriminant Analysis we skip steps 3-5 as they do not require hyperparameter tuning.)
+
+3.  **Tuning Grid Setup**: Define the parameters to be tuned and set the ranges for different levels of tuning for each parameter.
+
+4.  **Model Tuning**: Tune the model using the specified hyperparameters.
+
+5.  **Model Selection**: Choose the most accurate model from the tuning grid and finalize the workflow with those tuning parameters.
+
+6.  **Model Fitting**: Fit the model with the finalized workflow to our sunset training dataset.
+
+7.  **Result Saving**: Save the results to an RDA file for easy loading back into the main project file.
+
+### Fitting the Model
+
+```{r}
+save(folds, mushroom_recipe, train, test, file = "/Users/fionhuang/Desktop/Pstat 131/Final Project/RDA/Model_Setup.rda") 
+
+# Logistic Regression
+load(file = "/Users/fionhuang/Desktop/Pstat 131/Final Project/RDA/Logistic Regression.rda")
+
+# Linear Discriminant
+load(file = "/Users/fionhuang/Desktop/Pstat 131/Final Project/RDA/Linear Discriminate.rda")
+
+# KNN
+load(file = "/Users/fionhuang/Desktop/Pstat 131/Final Project/RDA/knn.rda")
+
+# Decision Trees
+load(file = "/Users/fionhuang/Desktop/Pstat 131/Final Project/RDA/Decision Tree.rda")
+
+# Random Forest Models
+load(file = "/Users/fionhuang/Desktop/Pstat 131/Final Project/RDA/Random Forest.rda")
+```
+
+# Model Results
+
+Since our model is on the larger side, I have saved each of their individual outcome and scores into an RDA file and have already load in our results of each model.
+We can now start analyzing their performances.
+
+## Visualizing Results
+
+One of the most useful tools for visualizing the results of our models that have been tuned is the `autoplot` function in r.
+This will visualize the effects that the change in certain parameters has on our metric of choice, `roc_auc`.
+For the sake of space, we only display the plots of our models with the four best ROC AUC values, which we have showed in the section before this.
+
+### KNN
+
+The bigger the nearest neighbors is the more accurate our model is.
+The highest ROC AUC a little above 0.998, which is pretty high up there.
+
+```{r}
+autoplot(knn_tune, metric = "roc_auc")
+```
+
+### Random Forest
+
+Let's now review the autoplot of the second best performing model, random forest.
+
+```{r}
+autoplot(rf_tune_auc)
+```
+
+We can see from the autoplot of the tuned random forest that the Minimal Node Size had minimal effect on the results.
+Randomly Selected Predictors values of 1-5 produce worse ROC_AUC results while values of 5-7 produce better results.
+The number of trees do not seem to effect the results much either since most of them follow the same trajectory as others.
+However there is some minor differences between the randomly selected predictors values 5 to 7.
+
+### Decision Tree
+
+Now we will review the Decision Tree.
+
+```{r}
+autoplot(tree_tune)
+```
+
+For the decision tree when it came to ROC AUC, and larger penalties caused the accuracy of the decision tree to drop.
+
+### Logistic Regression
+
+Plotting a confusion matrix for logistic regression.
+
+```{r}
+augment(log_fit, new_data = train) %>%
+  conf_mat(class, .pred_class) %>%
+  autoplot(type = "heatmap")
+```
+
+When we plot the confusion matrix for the logistic regression model we can see how many observations the model predicted correctly and the amount of observation the model predicted incorrectly.
+
+## Model Accuracies
+
+Before, we start visualizing our results.
+We are going to summarize the best ROC AUC values from our five models.
+That way we can choose our 4 best model to visualize.
+We will create a tibble in order to display the estimated final `roc_auc` value for each fitted model.
+
+```{r}
+log_auc <- augment(log_fit, new_data = train) %>%
+  roc_auc(class, .pred_e) %>%
+  select(.estimate)
+
+lda_auc <- augment(lda_fit, new_data = train) %>%
+  roc_auc(class, .pred_e) %>%
+  select(.estimate)
+
+knn_auc <- augment(knn_final_fit, new_data = train) %>%
+  roc_auc(class, .pred_e) %>%
+  select(.estimate)
+  
+dt_auc <- augment(dt_final_fit, new_data = train) %>%
+  roc_auc(class, .pred_e) %>%
+  select(.estimate)
+
+rf_auc <- augment(rf_final_fit_auc, new_data = train) %>%
+  roc_auc(class, .pred_e) %>%
+  select(.estimate)
+
+roc_aucs <- c(log_auc$.estimate,
+              lda_auc$.estimate,
+              knn_auc$.estimate,
+              dt_auc$.estimate,
+              rf_auc$.estimate)
+
+model_names <- c("Logistic Regression",
+                 "LDA",
+                 "KNN",
+                 "Decision Tree",
+                 "Random Forest")
+
+results <- tibble(Model = model_names,
+                  ROC_AUC = roc_aucs)
+
+results <- results %>% 
+  arrange(-roc_aucs)
+
+results
+```
+
+# Results From Our Best Models
+
+Now from looking at the ROC of each model we can confidently say that KNN is our best model.
+With an `roc_auc` of 0.998.
+Let's continue with our analysis and fit our model into the testing dataset.
+
+![](images/mushroom%202.jpeg)
+
+## KNN
+
+The k-Nearest Neighbors (k-NN) classification model is a straightforward and intuitive machine learning algorithm used for classifying data points based on the categories of their nearest neighbors.
+It operates by storing all the training data and does not involve a traditional training phase.
+When a new data point needs to be classified, the algorithm calculates the distance between this point and all points in the training dataset using a distance metric such as Euclidean distance.
+It then identifies the k nearest neighbors to the query point, where k is a user-defined constant.
+The new data point is classified based on a majority vote among the k nearest neighbors, meaning it is assigned the class that is most common among these neighbors.
+k-NN can be computationally intensive and sensitive to irrelevant features and high-dimensional data.
+Despite its limitations, k-NN remains a powerful tool for both classification and regression tasks, particularly when interpretability and simplicity are crucial.
+
+### Best Model is...
+
+drum roll please
+
+```{r}
+show_best(knn_tune, metric = "roc_auc") %>% #showing the best rf model
+  select(-.estimator, .config) %>%
+  slice(1)
+```
+
+KNN 5!
+🥳 KNN 5 seems to have performed the best overall from all the KNN models.
+This is on top of being the best of the seven different prediction models.
+Below is the model’s output and scores, as well as the its associated parameters.
+
+### Final ROC AUC Results
+
+Now, the moment we have all been waiting for.
+We will be fitting our best model into our testing dataset.
+Let’s take a look!
+
+```{r}
+knn_roc_auc <- augment(knn_final_fit, new_data = test, type = 'prob') %>%
+  roc_auc(class, .pred_e) %>%
+  select(.estimate)
+knn_roc_auc
+```
+
+With a final ROC AUC score of 0.998 on our testing data, we can say our model is nearly perfect!
+Next we will visualize our result.
+
+### ROC Curve
+
+Now to visualize our AUC score we will take look at the ROC curve real quick.
+The higher up and left the curve is, the better the model’s AUC will be.
+One way to think about it is the more our curve looks like a right triangle the better.
+As we can see below our curve is nearly perfect meaning our model is a good fit.
+
+```{r}
+augment(knn_final_fit, new_data = test, type = 'prob') %>%
+  roc_curve(class, .pred_e) %>%
+  autoplot()
+```
+
+### Confusion Matrix
+
+Plotting a confusion matrix for our best performing model shows what how many observations was misclassified and how many observation that was predicated correctly.
+
+```{r}
+augment(knn_final_fit, new_data = test) %>%
+  conf_mat(class, .pred_class) %>%
+  autoplot(type = "heatmap")
+```
+
+# Conclusion
+
+After fitting five models on ten cross-validated folds and conducting analysis on each, the best model for predicting mushroom edibility appears to be the K-nearest neighbors (KNN) model.
+KNN is a supervised learning algorithm used for classification and regression tasks.
+When given a new data point, KNN calculates the distance between this point and all others in the training set.
+It then selects the k nearest neighbors based on these distances.
+For classification, the majority class among the k neighbors is assigned to the new data point, whereas for regression, the average target value of the k neighbors is used.
+KNN is non-parametric and lazy, meaning it makes no assumptions about data distribution and delays computation until prediction time.
+The choice of hyperparameter k is crucial as it affects the model's flexibility and performance.
+
+Areas for improvement include handling missing data instead of discarding entire variables, which would provide more data for model training.
+Despite removing some variables, the models still performed well.
+Future exploration could involve studying the species of mushrooms and their impact on edibility.
+Working with this dataset was enjoyable, especially given my interest in various types of mushrooms.
+
+Overall, developing a predictive model to determine mushroom edibility was a valuable experience.
+It offered the opportunity to work with a large dataset, build machine learning models, and enhance data analysis skills.
+Building such models is challenging, requiring significant research and determination, but it was ultimately a rewarding experience.
+I look forward to my next project!

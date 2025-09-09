@@ -1,0 +1,105 @@
+---
+title: "Data Memo"
+author: "PSTAT 231"
+date: "2024-04-16"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+                      warning = FALSE)
+```
+
+```{r}
+library(readr)
+mushroom <- read_csv("/Users/fionhuang/Desktop/Pstat 131/Final Project/mushroom.csv")
+mushroom
+```
+
+# An overview of the data set
+
+#### What does it include?
+
+The dataset includes 61,069 observations of mushrooms, described by 21 features related to physical characteristics such as cap diameter, cap shape, cap surface, cap color, and more, as well as ecological and seasonal data.
+
+#### Where and how will you be obtaining it? Include the link and source.
+
+I obtained the data set on Kaggle (<https://www.kaggle.com/datasets/vishalpnaik/mushroom-classification-edible-or-poisonous?resource=download>)
+
+#### About how many observations? How many predictors?
+
+Total observations: 61,069
+
+Total predictors: 20 (excluding the response variable which is 'class')
+
+#### What types of variables will you be working with?
+
+Categorical variables: Most features are categorical (e.g., cap-shape, cap-color, has-ring, etc.).
+
+Numerical variables: A few features such as cap diameter, stem height, and stem width are numerical.
+
+#### Is there any missing data? About how much? Do you have an idea of how to handle it?
+
+There is a considerable amount of missing data in several columns such as 'cap-surface', 'gill-attachment', 'gill-spacing', 'stem-root', 'stem-surface', 'veil-type', 'veil-color', and 'spore-print-color'.
+A way to handle the missing data might be to remove the variable with excessive missing values.
+
+# **An overview of the research questions**
+
+#### What variable(s) are you interested in predicting? What question(s) are you interested in answering?
+
+The question of interest is whether the physical and ecological characteristics of a mushroom can predict its class (edible or poisonous).
+
+#### Name your response/outcome variable(s) and briefly describe it/them.
+
+The response variable is 'class', which indicates whether a mushroom is poisonous ('p') or edible ('e').
+
+#### Will these questions be best answered with a classification or regression approach?
+
+This will be a classification problem since the outcome variable 'class' is categorical.
+
+#### Which predictors do you think will be especially useful?
+
+I think predictors that will be especially useful include physical characteristics associated with mushroom toxicity, such as 'cap-color', 'gill-color', 'ring-type', and 'spore-print-color'.
+
+#### Is the goal of your model descriptive, predictive, inferential, or a combination? Explain.
+
+The goal is primarily predictive.
+To accurately predict the toxicity of mushrooms based on observable characteristics.
+There may also be an inferential aspect, understanding which features are most predictive of toxicity.
+
+# **Proposed project timeline**
+
+#### When do you plan on having your data set loaded, beginning your exploratory data analysis, etc? Provide a general timeline for the rest of the quarter.
+
+**Week 3:** Obtain data set and data memo submission
+
+**Week 4:** Begin analysis of data set to understand variable distributions and the extent of missing data
+
+**Week 5:** Begin data processing, handling missing data
+
+**Week 6:** Begin data split and model selection and training
+
+**Week 7:** Model evaluation using a hold-out set or cross-validation and tuning model parameters
+
+**Week 8:** Interpret results and conclusions
+
+**Week 9:** Finalize model and narration
+
+**Week 11:** Submission of final project
+
+# **Questions and concerns**
+
+#### Are there any problems or difficult aspects of the project you anticipate?
+
+An concern I have about the project is understanding the projects specifics to receive full point and understanding how the different models work.
+
+#### Any specific questions you have for me/the instructional team?
+
+N/A as of right now
